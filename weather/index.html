@@ -6,6 +6,7 @@
   <title>Weather</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -99,6 +100,19 @@
     .leaflet-control-attribution { font-size: 10px; }
     .base-tiles { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.4); }
 
+    .moon-top, .moon-times { display: flex; justify-content: space-between; }
+    .moon-top .big { font-size: 18px; font-weight: 600; }
+    .sub { font-size: 12px; opacity: 0.7; }
+    .moon-mid { display: grid; grid-template-columns: 1fr 160px 1fr; align-items: center; gap: 8px; margin: 12px 0 4px; }
+    #moon-big { width: 160px; height: 160px; filter: drop-shadow(0 0 18px rgba(140, 170, 255, 0.35)); }
+    .moon-side { text-align: center; }
+    .pill { display: inline-block; border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 10px; padding: 2px 10px; font-size: 16px; margin-bottom: 4px; }
+    .moon-age { text-align: center; font-size: 15px; margin-bottom: 10px; }
+    .moon-row { display: flex; justify-content: space-between; margin: 6px 0 12px; }
+    .moon-row div { text-align: center; font-size: 11px; opacity: 0.8; }
+    .moon-row .today { opacity: 1; font-weight: 700; }
+    .moon-row svg { width: 28px; height: 28px; display: block; margin: 0 auto 3px; }
+
     .message { text-align: center; opacity: 0.9; padding: 12px 0; }
     .credit { font-size: 11px; opacity: 0.6; text-align: center; margin-top: 8px; }
     .credit a { color: inherit; }
@@ -168,6 +182,26 @@
         <div class="tide-note">Height vs. mean sea level · model estimate, not for navigation · drag across the chart</div>
       </section>
 
+      <section class="panel backed hidden" id="moon">
+        <div class="label">Moon</div>
+        <div class="moon-top">
+          <div><div class="big" id="moon-phase"></div><div class="sub">Moon phase</div></div>
+          <div style="text-align:right"><div class="big" id="moon-illum"></div><div class="sub">Illuminated</div></div>
+        </div>
+        <div class="moon-mid">
+          <div class="moon-side"><div class="pill" id="moon-l-time"></div><div class="sub" id="moon-l-label"></div></div>
+          <svg id="moon-big" viewBox="0 0 200 200"></svg>
+          <div class="moon-side"><div class="pill" id="moon-r-time"></div><div class="sub" id="moon-r-label"></div></div>
+        </div>
+        <div class="moon-age" id="moon-age"></div>
+        <div class="moon-row" id="moon-row"></div>
+        <div class="moon-times">
+          <div><b id="moonrise"></b><div class="sub">Moonrise today</div></div>
+          <div style="text-align:right"><b id="moonset"></b><div class="sub">Moonset today</div></div>
+        </div>
+        <div class="tide-note">Moon photo: NASA/GSFC/Arizona State University (public domain)</div>
+      </section>
+
       <p class="credit" id="credit"></p>
     </div>
   </main>
@@ -230,6 +264,7 @@
         render(place, data);
         const tideData = tideRes && tideRes.ok ? await tideRes.json().catch(() => null) : null;
         renderTides(tideData, data.current.time);
+        renderMoon(place, data);
         $("message").classList.add("hidden");
         showRadar(place);
       } catch {
@@ -429,6 +464,92 @@
       }).join("");
 
       $("weather").classList.remove("hidden");
+    }
+
+    // ---------- Moon (SunCalc library; times in the searched city's timezone) ----------
+    const MOON_IMG = "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c9/Moon_nearside_LRO.jpg/960px-Moon_nearside_LRO.jpg";
+    const SYNODIC = 29.530588853; // days from new moon to new moon
+    const HOUR = 3600e3;
+
+    function phaseName(p) {
+      const e = 1 / SYNODIC; // ±1 day counts as the exact phase
+      if (p < e || p > 1 - e) return "New Moon";
+      if (p < 0.25 - e) return "Waxing Crescent";
+      if (p < 0.25 + e) return "First Quarter";
+      if (p < 0.5 - e) return "Waxing Gibbous";
+      if (p < 0.5 + e) return "Full Moon";
+      if (p < 0.75 - e) return "Waning Gibbous";
+      if (p < 0.75 + e) return "Last Quarter";
+      return "Waning Crescent";
+    }
+
+    // Dark part of the moon for phase p (0 new → 0.5 full → 1 new), lit on the right while waxing
+    function shadowPath(p, cx, cy, r) {
+      const c = Math.cos(2 * Math.PI * p), rx = Math.abs(c) * r, waxing = p < 0.5;
+      const s1 = waxing ? 0 : 1, s2 = waxing ? (c > 0 ? 0 : 1) : (c > 0 ? 1 : 0);
+      return `M${cx},${cy - r} A${r},${r} 0 0 ${s1} ${cx},${cy + r} A${rx},${r} 0 0 ${s2} ${cx},${cy - r}Z`;
+    }
+
+    // Moonrise/moonset: scan the moon's altitude every 10 minutes and interpolate the horizon crossings
+    function moonEvents(from, to, lat, lon) {
+      const alt = (t) => SunCalc.getMoonPosition(new Date(t), lat, lon).altitude * 180 / Math.PI - 0.133;
+      const out = [], step = HOUR / 6;
+      let t0 = from, a0 = alt(t0);
+      for (let t1 = from + step; t1 <= to; t1 += step) {
+        const a1 = alt(t1);
+        if ((a0 <= 0) !== (a1 <= 0)) out.push({ t: t0 + (a0 / (a0 - a1)) * step, rise: a1 > 0 });
+        t0 = t1; a0 = a1;
+      }
+      return out;
+    }
+
+    function renderMoon(place, data) {
+      const section = $("moon");
+      if (!window.SunCalc) return section.classList.add("hidden");
+      section.classList.remove("hidden");
+      const { latitude: lat, longitude: lon } = place;
+      const offset = data.utc_offset_seconds * 1000;
+      const local = (ms) => { const d = new Date(ms + offset); return fmtTime(d.getUTCHours() + d.getUTCMinutes() / 60); };
+      const dur = (ms) => `${Math.floor(ms / HOUR)}h ${String(Math.floor((ms % HOUR) / 60e3)).padStart(2, "0")}m`;
+      const flip = lat < 0 ? ' transform="translate(200,0) scale(-1,1)"' : ""; // lit side is mirrored south of the equator
+
+      const now = Date.now();
+      const ill = SunCalc.getMoonIllumination(new Date(now));
+      $("moon-phase").textContent = phaseName(ill.phase);
+      $("moon-illum").textContent = `${(ill.fraction * 100).toFixed(1)}%`;
+      $("moon-age").textContent = `${(ill.phase * SYNODIC).toFixed(1)} days`;
+      $("moon-big").innerHTML = `
+        <defs><clipPath id="moon-clip"><circle cx="100" cy="100" r="96"/></clipPath>
+          <filter id="moon-soft"><feGaussianBlur stdDeviation="2.5"/></filter></defs>
+        <circle cx="100" cy="100" r="96" fill="#2a2e36"/>
+        <image href="${MOON_IMG}" x="4" y="4" width="192" height="192" clip-path="url(#moon-clip)" preserveAspectRatio="xMidYMid slice"/>
+        <g clip-path="url(#moon-clip)"${flip}><path d="${shadowPath(ill.phase, 100, 100, 96)}" fill="rgba(4,7,14,0.9)" filter="url(#moon-soft)"/></g>`;
+
+      // Rise/set: "today" is the city's local calendar day
+      const midnight = Date.parse(data.current.time.slice(0, 10) + "T00:00Z") - offset;
+      const events = moonEvents(now - 36 * HOUR, now + 36 * HOUR, lat, lon);
+      const today = events.filter((e) => e.t >= midnight && e.t < midnight + 24 * HOUR);
+      const rise = today.find((e) => e.rise), set = today.find((e) => !e.rise);
+      $("moonrise").textContent = rise ? local(rise.t) : "None";
+      $("moonset").textContent = set ? local(set.t) : "None";
+
+      // While the moon is up: time since it rose / until it sets. While down: since it set / until it rises.
+      const isUp = SunCalc.getMoonPosition(new Date(now), lat, lon).altitude * 180 / Math.PI > 0.133;
+      const last = [...events].reverse().find((e) => e.t <= now && e.rise === isUp);
+      const next = events.find((e) => e.t > now && e.rise !== isUp);
+      $("moon-l-time").textContent = last ? dur(now - last.t) : "–";
+      $("moon-l-label").textContent = isUp ? "Since moonrise" : "Since moonset";
+      $("moon-r-time").textContent = next ? dur(next.t - now) : "–";
+      $("moon-r-label").textContent = isUp ? "Until moonset" : "Until moonrise";
+
+      // Next 8 days, at local noon
+      $("moon-row").innerHTML = Array.from({ length: 8 }, (_, k) => {
+        const t = midnight + (12 + 24 * k) * HOUR;
+        const p = SunCalc.getMoonIllumination(new Date(t)).phase;
+        const day = k === 0 ? "Today" : new Date(t + offset).toLocaleDateString("en-US", { weekday: "short", timeZone: "UTC" });
+        return `<div class="${k === 0 ? "today" : ""}"><svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="#cfd3d8"/>
+          <g${lat < 0 ? ' transform="translate(40,0) scale(-1,1)"' : ""}><path d="${shadowPath(p, 20, 20, 18)}" fill="rgba(10,14,22,0.92)"/></g></svg>${day}</div>`;
+      }).join("");
     }
 
     // ---------- Rain radar (RainViewer, free for personal/educational use; max tile zoom 7) ----------
