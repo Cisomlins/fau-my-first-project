@@ -130,8 +130,6 @@
     .wind-stats b { text-align: right; }
 
     .message { text-align: center; opacity: 0.9; padding: 12px 0; }
-    .credit { font-size: 11px; opacity: 0.6; text-align: center; margin-top: 8px; }
-    .credit a { color: inherit; }
     .hidden { display: none; }
   </style>
 </head>
@@ -253,7 +251,6 @@
         </section>
       </div>
 
-      <p class="credit" id="credit"></p>
     </div>
   </main>
 
@@ -276,15 +273,10 @@
       return { text: "Thunderstorm", icon: "⛈️", theme: "storm" };
     }
 
-    // Background photos (free Unsplash License), one per weather theme
+    // Background photos (in weather/img/), one per weather theme
     const PHOTOS = {
-      "clear-day":   { url: "https://images.unsplash.com/photo-1773928988021-3f7255b4956e", by: "Aleksei Agafonov", id: "1gaXeP0-XQg" },
-      "clear-night": { url: "https://images.unsplash.com/photo-1628498188873-579210ce622e", by: "Olena Bohovyk", id: "6FdG9OL6JLI" },
-      "cloudy":      { url: "https://images.unsplash.com/photo-1532178910-7815d6919875", by: "Tobias Stonjeck", id: "e_ZxKz3_2Nc" },
-      "fog":         { url: "https://images.unsplash.com/photo-1609523235355-82f40b23a6f2", by: "Natalia Y.", id: "4Idgl3pB6Po" },
-      "rain":        { url: "https://images.unsplash.com/photo-1599806112354-67f8b5425a06", by: "Lucie Morel", id: "Wk63a3_NMf0" },
-      "storm":       { url: "https://images.unsplash.com/photo-1429552077091-836152271555", by: "Brandon Morgan", id: "3qucB7U2l7I" },
-      "snow":        { url: "https://images.unsplash.com/photo-1635013295926-fc7a029bdab7", by: "Jussi Hellsten", id: "oIBdgngCNUc" },
+      "clear-day": "img/clear-day.webp", "clear-night": "img/clear-night.webp", "cloudy": "img/cloudy.webp",
+      "fog": "img/fog.webp", "rain": "img/rain.webp", "storm": "img/storm.webp", "snow": "img/snow.webp",
     };
 
     const $ = (id) => document.getElementById(id);
@@ -462,9 +454,7 @@
       const now = describe(c.weather_code, c.is_day);
       const hi = Math.max(0, h.time.findIndex((t) => t.slice(0, 13) === c.time.slice(0, 13)));
 
-      const photo = PHOTOS[now.theme];
-      $("bg").style.backgroundImage = `url("${photo.url}?w=1400&q=70&auto=format&fit=crop")`;
-      $("credit").innerHTML = `Photo: <a href="https://unsplash.com/photos/${photo.id}" target="_blank" rel="noopener">${photo.by}</a> / Unsplash`;
+      $("bg").style.backgroundImage = `url("${PHOTOS[now.theme]}")`;
 
       $("city").textContent = place.name;
       $("date").textContent = new Date(c.time.slice(0, 10) + "T12:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }) + " · " + clock(c.time);
