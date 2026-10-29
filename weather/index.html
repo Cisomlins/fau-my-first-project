@@ -13,60 +13,61 @@
       min-height: 100vh;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
       color: #fff;
-      background: linear-gradient(160deg, #4a90e2 0%, #87b8f0 100%);
-      background-attachment: fixed;
-      transition: background 1s ease;
-      padding: 24px 16px 48px;
-    }
-    /* Background changes with the weather */
-    body.clear-day   { background: linear-gradient(160deg, #2f80ed 0%, #56ccf2 100%); }
-    body.clear-night { background: linear-gradient(160deg, #0f2027 0%, #203a43 50%, #2c5364 100%); }
-    body.cloudy      { background: linear-gradient(160deg, #616f84 0%, #a3b1c6 100%); }
-    body.rain        { background: linear-gradient(160deg, #314755 0%, #26a0da 100%); }
-    body.storm       { background: linear-gradient(160deg, #232526 0%, #414345 100%); }
-    body.snow        { background: linear-gradient(160deg, #83a4d4 0%, #b6fbff 100%); }
-
-    .app { max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
-
-    /* Frosted glass card */
-    .glass {
-      background: rgba(255, 255, 255, 0.15);
-      backdrop-filter: blur(20px) saturate(160%);
-      -webkit-backdrop-filter: blur(20px) saturate(160%);
-      border: 1px solid rgba(255, 255, 255, 0.25);
-      border-radius: 22px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
-      padding: 16px 18px;
+      background: #10161f;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+      padding: 20px 16px 40px;
     }
 
-    .search { display: flex; gap: 8px; padding: 8px; }
+    /* Full-screen photo of the current weather, darkened toward the bottom so text stays readable */
+    .bg {
+      position: fixed; inset: 0; z-index: -1;
+      background-color: #1a2230; background-size: cover; background-position: center;
+    }
+    .bg::after {
+      content: ""; position: absolute; inset: 0;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.35) 0%, rgba(0,0,0,0.1) 25%, rgba(0,0,0,0.5) 55%, rgba(0,0,0,0.8) 100%);
+    }
+
+    .app { max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+
+    .search { display: flex; gap: 8px; border-bottom: 1px solid rgba(255, 255, 255, 0.35); }
     .search input {
       flex: 1; min-width: 0;
       background: transparent; border: none; outline: none;
-      color: #fff; font-size: 16px; padding: 8px 10px;
+      color: #fff; font-size: 16px; padding: 8px 2px; text-shadow: inherit;
     }
-    .search input::placeholder { color: rgba(255, 255, 255, 0.7); }
-    .search button {
-      background: rgba(255, 255, 255, 0.25); border: none; color: #fff;
-      border-radius: 14px; padding: 8px 16px; font-size: 15px; cursor: pointer;
-    }
-    .search button:hover { background: rgba(255, 255, 255, 0.35); }
+    .search input::placeholder { color: rgba(255, 255, 255, 0.75); }
+    .search button { background: transparent; border: none; color: #fff; font-size: 15px; cursor: pointer; text-shadow: inherit; }
 
-    .current { text-align: center; padding: 28px 18px; }
-    .current .city { font-size: 30px; font-weight: 500; }
-    .current .temp { font-size: 96px; font-weight: 200; line-height: 1.05; }
-    .current .desc { font-size: 20px; opacity: 0.9; }
-    .current .hilo { font-size: 17px; margin-top: 4px; }
+    .hero .city { text-align: center; font-size: 18px; font-weight: 500; }
+    .hero .date { font-size: 16px; opacity: 0.9; margin-top: 18px; }
+    .hero .spacer { height: 22vh; }
+    .temp-row { display: flex; align-items: center; gap: 16px; }
+    .hero .temp { font-size: 96px; font-weight: 200; line-height: 1; }
+    .wind { display: flex; align-items: center; gap: 8px; font-size: 14px; line-height: 1.2; }
+    .wind svg { width: 30px; height: 30px; }
+    .hero .desc { font-size: 20px; margin: 8px 0 12px; }
+    .stats {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size: 14px;
+      padding: 10px 0; border-top: 1px solid rgba(255,255,255,0.3); border-bottom: 1px solid rgba(255,255,255,0.3);
+    }
+    .stats .k { opacity: 0.8; }
+    .stats b { font-weight: 600; }
+
+    /* Sections sit directly on the photo; the chart and map get a soft dark backing */
+    .panel { padding: 14px 0 6px; }
+    .panel.backed { background: rgba(0, 0, 0, 0.35); border-radius: 16px; padding: 14px 16px; margin-top: 6px; }
 
     .label {
       font-size: 13px; text-transform: uppercase; letter-spacing: 0.04em;
-      opacity: 0.7; padding-bottom: 10px; margin-bottom: 10px;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+      opacity: 0.8; padding-bottom: 8px; margin-bottom: 10px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.25);
     }
 
     .hourly { display: flex; gap: 22px; overflow-x: auto; padding-bottom: 4px; }
     .hour { display: flex; flex-direction: column; align-items: center; gap: 8px; flex-shrink: 0; font-size: 15px; }
     .hour .icon { font-size: 24px; }
+    .hour.now span:first-child { background: #fff; color: #111; border-radius: 8px; padding: 0 7px; text-shadow: none; }
 
     .day {
       display: grid; grid-template-columns: 60px 36px 1fr; align-items: center;
@@ -88,54 +89,66 @@
     #radar-map { height: 320px; border-radius: 14px; overflow: hidden; background: #1b2530; }
     .radar-controls { display: flex; align-items: center; gap: 12px; margin-top: 10px; font-size: 15px; }
     .radar-controls button {
-      background: rgba(255, 255, 255, 0.25); border: none; color: #fff;
+      background: rgba(255, 255, 255, 0.2); border: none; color: #fff;
       border-radius: 12px; padding: 6px 14px; font-size: 15px; cursor: pointer;
     }
     .leaflet-control-attribution { font-size: 10px; }
     .base-tiles { filter: invert(1) hue-rotate(180deg) brightness(0.85) contrast(0.9) saturate(0.4); }
 
-    .details { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .details .value { font-size: 28px; font-weight: 400; margin-top: 4px; }
-
-    .message { text-align: center; opacity: 0.9; }
+    .message { text-align: center; opacity: 0.9; padding: 12px 0; }
+    .credit { font-size: 11px; opacity: 0.6; text-align: center; margin-top: 8px; }
+    .credit a { color: inherit; }
     .hidden { display: none; }
   </style>
 </head>
-<body class="clear-day">
+<body>
+  <div class="bg" id="bg"></div>
   <main class="app">
-    <form class="glass search" id="search-form">
+    <form class="search" id="search-form">
       <input id="search-input" type="text" placeholder="Search for a city" autocomplete="off">
       <button type="submit">Search</button>
     </form>
 
-    <p class="glass message" id="message">Loading…</p>
+    <p class="message" id="message">Loading…</p>
 
     <div id="weather" class="hidden">
-      <section class="current">
+      <section class="hero">
         <div class="city" id="city"></div>
-        <div class="temp" id="temp"></div>
+        <div class="date" id="date"></div>
+        <div class="spacer"></div>
+        <div class="temp-row">
+          <div class="temp" id="temp"></div>
+          <div class="wind">
+            <svg viewBox="0 0 24 24" id="wind-arrow"><circle cx="12" cy="12" r="11" fill="none" stroke="#fff" stroke-width="1.5"/><path d="M12 5l4 12-4-3-4 3z" fill="#fff"/></svg>
+            <div><div id="wind-dir"></div><div id="wind"></div></div>
+          </div>
+        </div>
         <div class="desc" id="desc"></div>
-        <div class="hilo" id="hilo"></div>
+        <div class="stats">
+          <div><span class="k">Feels like:</span> <b id="feels"></b></div>
+          <div><span class="k">Min:</span> <b id="min"></b> <span class="k">Max:</span> <b id="max"></b></div>
+          <div><span class="k">Precipitation:</span> <b id="precip"></b></div>
+          <div><span class="k">Chance of precip:</span> <b id="rain"></b></div>
+          <div><span class="k">Pressure:</span> <b id="pressure"></b></div>
+          <div><span class="k">Visibility:</span> <b id="visibility"></b></div>
+          <div><span class="k">Humidity:</span> <b id="humidity"></b></div>
+          <div><span class="k">Dew point:</span> <b id="dew"></b></div>
+          <div><span class="k">Sunrise:</span> <b id="sunrise"></b></div>
+          <div><span class="k">Sunset:</span> <b id="sunset"></b></div>
+        </div>
       </section>
 
-      <section class="glass">
+      <section class="panel">
         <div class="label">Hourly forecast</div>
         <div class="hourly" id="hourly"></div>
       </section>
 
-      <section class="glass" style="margin-top:16px">
+      <section class="panel">
         <div class="label">7-day forecast</div>
         <div id="daily"></div>
       </section>
 
-      <section class="glass hidden" id="tides" style="margin-top:16px">
-        <div class="label">Tides</div>
-        <div class="tide-readout" id="tide-readout"></div>
-        <svg id="tide-chart" viewBox="0 0 360 190"></svg>
-        <div class="tide-note">Height vs. mean sea level · model estimate, not for navigation · drag across the chart</div>
-      </section>
-
-      <section class="glass" id="radar" style="margin-top:16px">
+      <section class="panel backed" id="radar">
         <div class="label">Rain radar · last ~80 min</div>
         <div id="radar-map"></div>
         <div class="radar-controls">
@@ -144,12 +157,14 @@
         </div>
       </section>
 
-      <section class="details" style="margin-top:16px">
-        <div class="glass"><div class="label">Feels like</div><div class="value" id="feels"></div></div>
-        <div class="glass"><div class="label">Humidity</div><div class="value" id="humidity"></div></div>
-        <div class="glass"><div class="label">Wind</div><div class="value" id="wind"></div></div>
-        <div class="glass"><div class="label">Rain chance</div><div class="value" id="rain"></div></div>
+      <section class="panel backed hidden" id="tides">
+        <div class="label">Tides</div>
+        <div class="tide-readout" id="tide-readout"></div>
+        <svg id="tide-chart" viewBox="0 0 360 190"></svg>
+        <div class="tide-note">Height vs. mean sea level · model estimate, not for navigation · drag across the chart</div>
       </section>
+
+      <p class="credit" id="credit"></p>
     </div>
   </main>
 
@@ -163,7 +178,7 @@
       if (code === 0)  return { text: "Clear", icon: isDay ? "☀️" : "🌙", theme: isDay ? "clear-day" : "clear-night" };
       if (code <= 2)   return { text: "Partly Cloudy", icon: isDay ? "⛅" : "☁️", theme: isDay ? "clear-day" : "clear-night" };
       if (code === 3)  return { text: "Cloudy", icon: "☁️", theme: "cloudy" };
-      if (code <= 48)  return { text: "Fog", icon: "🌫️", theme: "cloudy" };
+      if (code <= 48)  return { text: "Fog", icon: "🌫️", theme: "fog" };
       if (code <= 57)  return { text: "Drizzle", icon: "🌦️", theme: "rain" };
       if (code <= 67)  return { text: "Rain", icon: "🌧️", theme: "rain" };
       if (code <= 77)  return { text: "Snow", icon: "❄️", theme: "snow" };
@@ -171,6 +186,17 @@
       if (code <= 86)  return { text: "Snow Showers", icon: "🌨️", theme: "snow" };
       return { text: "Thunderstorm", icon: "⛈️", theme: "storm" };
     }
+
+    // Background photos (free Unsplash License), one per weather theme
+    const PHOTOS = {
+      "clear-day":   { url: "https://images.unsplash.com/photo-1773928988021-3f7255b4956e", by: "Aleksei Agafonov", id: "1gaXeP0-XQg" },
+      "clear-night": { url: "https://images.unsplash.com/photo-1628498188873-579210ce622e", by: "Olena Bohovyk", id: "6FdG9OL6JLI" },
+      "cloudy":      { url: "https://images.unsplash.com/photo-1532178910-7815d6919875", by: "Tobias Stonjeck", id: "e_ZxKz3_2Nc" },
+      "fog":         { url: "https://images.unsplash.com/photo-1609523235355-82f40b23a6f2", by: "Natalia Y.", id: "4Idgl3pB6Po" },
+      "rain":        { url: "https://images.unsplash.com/photo-1599806112354-67f8b5425a06", by: "Lucie Morel", id: "Wk63a3_NMf0" },
+      "storm":       { url: "https://images.unsplash.com/photo-1429552077091-836152271555", by: "Brandon Morgan", id: "3qucB7U2l7I" },
+      "snow":        { url: "https://images.unsplash.com/photo-1635013295926-fc7a029bdab7", by: "Jussi Hellsten", id: "oIBdgngCNUc" },
+    };
 
     const $ = (id) => document.getElementById(id);
 
@@ -183,10 +209,10 @@
       showMessage("Loading…");
       const url = "https://api.open-meteo.com/v1/forecast"
         + `?latitude=${place.latitude}&longitude=${place.longitude}`
-        + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,is_day"
-        + "&hourly=temperature_2m,weather_code,is_day"
-        + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
-        + "&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=7";
+        + "&current=temperature_2m,apparent_temperature,relative_humidity_2m,weather_code,wind_speed_10m,wind_direction_10m,pressure_msl,is_day"
+        + "&hourly=temperature_2m,weather_code,is_day,dew_point_2m,visibility"
+        + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset"
+        + "&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=7";
 
       // Tides: Open-Meteo Marine sea level (yesterday → tomorrow, so highs/lows near midnight are found)
       const tideUrl = "https://marine-api.open-meteo.com/v1/marine"
@@ -316,29 +342,47 @@
     chart.addEventListener("pointermove", onPointer);
     chart.addEventListener("pointerleave", (e) => tide && e.pointerType === "mouse" && moveTideCursor(tide.nowHour));
 
+    const COMPASS = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
+    const clock = (iso) => fmtTime(Number(iso.slice(11, 13)) + Number(iso.slice(14, 16)) / 60);
+
     function render(place, data) {
       const c = data.current;
       const d = data.daily;
+      const h = data.hourly;
       const now = describe(c.weather_code, c.is_day);
+      const hi = Math.max(0, h.time.findIndex((t) => t.slice(0, 13) === c.time.slice(0, 13)));
 
-      document.body.className = now.theme;
+      const photo = PHOTOS[now.theme];
+      $("bg").style.backgroundImage = `url("${photo.url}?w=1400&q=70&auto=format&fit=crop")`;
+      $("credit").innerHTML = `Photo: <a href="https://unsplash.com/photos/${photo.id}" target="_blank" rel="noopener">${photo.by}</a> / Unsplash`;
+
       $("city").textContent = place.name;
+      $("date").textContent = new Date(c.time.slice(0, 10) + "T12:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }) + " · " + clock(c.time);
       $("temp").textContent = `${Math.round(c.temperature_2m)}°`;
       $("desc").textContent = now.text;
-      $("hilo").textContent = `H:${Math.round(d.temperature_2m_max[0])}°  L:${Math.round(d.temperature_2m_min[0])}°`;
-      $("feels").textContent = `${Math.round(c.apparent_temperature)}°`;
-      $("humidity").textContent = `${c.relative_humidity_2m}%`;
+      // Arrow points where the wind is blowing to (wind direction is where it comes from)
+      $("wind-arrow").querySelector("path").setAttribute("transform", `rotate(${c.wind_direction_10m + 180} 12 12)`);
+      $("wind-dir").textContent = COMPASS[Math.round(c.wind_direction_10m / 22.5) % 16];
       $("wind").textContent = `${Math.round(c.wind_speed_10m)} mph`;
+      $("feels").textContent = `${Math.round(c.apparent_temperature)}°`;
+      $("min").textContent = `${Math.round(d.temperature_2m_min[0])}°`;
+      $("max").textContent = `${Math.round(d.temperature_2m_max[0])}°`;
+      $("precip").textContent = `${(d.precipitation_sum[0] ?? 0).toFixed(2)} in`;
       $("rain").textContent = `${d.precipitation_probability_max[0] ?? 0}%`;
+      $("pressure").textContent = `${(c.pressure_msl * 0.02953).toFixed(2)} inHg`;
+      $("visibility").textContent = h.visibility[hi] == null ? "–" : `${(h.visibility[hi] / 1609.34).toFixed(1)} mi`;
+      $("humidity").textContent = `${c.relative_humidity_2m}%`;
+      $("dew").textContent = h.dew_point_2m[hi] == null ? "–" : `${Math.round(h.dew_point_2m[hi])}°`;
+      $("sunrise").textContent = clock(d.sunrise[0]);
+      $("sunset").textContent = clock(d.sunset[0]);
 
       // Next 12 hours, starting from the current hour (times are in the location's local time)
-      const h = data.hourly;
-      const start = Math.max(0, h.time.findIndex((t) => t.slice(0, 13) === c.time.slice(0, 13)));
+      const start = hi;
       $("hourly").innerHTML = h.time.slice(start, start + 12).map((t, i) => {
         const idx = start + i;
         const hour = Number(t.slice(11, 13));
         const label = i === 0 ? "Now" : `${hour % 12 || 12}${hour < 12 ? "AM" : "PM"}`;
-        return `<div class="hour">
+        return `<div class="hour${i === 0 ? " now" : ""}">
           <span>${label}</span>
           <span class="icon">${describe(h.weather_code[idx], h.is_day[idx]).icon}</span>
           <span>${Math.round(h.temperature_2m[idx])}°</span>
