@@ -76,6 +76,13 @@
     .day .range { text-align: right; }
     .day .range .min { opacity: 0.65; margin-right: 12px; }
 
+    .tide-readout { font-size: 17px; margin-bottom: 6px; }
+    .tide-readout .h { font-weight: 600; }
+    #tide-chart { width: 100%; height: auto; display: block; cursor: ew-resize; touch-action: pan-y; }
+    #tide-chart text { fill: #fff; font-size: 10px; }
+    #tide-chart .axis { opacity: 0.7; }
+    .tide-note { font-size: 12px; opacity: 0.65; margin-top: 6px; }
+
     .details { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .details .value { font-size: 28px; font-weight: 400; margin-top: 4px; }
 
@@ -108,6 +115,13 @@
       <section class="glass" style="margin-top:16px">
         <div class="label">7-day forecast</div>
         <div id="daily"></div>
+      </section>
+
+      <section class="glass hidden" id="tides" style="margin-top:16px">
+        <div class="label">Tides</div>
+        <div class="tide-readout" id="tide-readout"></div>
+        <svg id="tide-chart" viewBox="0 0 360 190"></svg>
+        <div class="tide-note">Height vs. mean sea level · model estimate, not for navigation · drag across the chart</div>
       </section>
 
       <section class="details" style="margin-top:16px">
@@ -154,15 +168,132 @@
         + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
         + "&temperature_unit=fahrenheit&wind_speed_unit=mph&timezone=auto&forecast_days=7";
 
+      // Tides: Open-Meteo Marine sea level (yesterday → tomorrow, so highs/lows near midnight are found)
+      const tideUrl = "https://marine-api.open-meteo.com/v1/marine"
+        + `?latitude=${place.latitude}&longitude=${place.longitude}`
+        + "&hourly=sea_level_height_msl&timezone=auto&past_days=1&forecast_days=2";
+
       try {
-        const res = await fetch(url);
+        const [res, tideRes] = await Promise.all([fetch(url), fetch(tideUrl).catch(() => null)]);
         if (!res.ok) throw new Error();
-        render(place, await res.json());
+        const data = await res.json();
+        render(place, data);
+        const tideData = tideRes && tideRes.ok ? await tideRes.json().catch(() => null) : null;
+        renderTides(tideData, data.current.time);
         $("message").classList.add("hidden");
       } catch {
         showMessage("Couldn't load the weather. Please try again.");
       }
     }
+
+    // ---------- Tides ----------
+    const M_TO_FT = 3.28084;
+    let tide = null; // { v: hourly heights in ft (72 values), start: index of today 00:00 }
+
+    function fmtTime(hour) {
+      let mins = Math.round(hour * 60);
+      const h = Math.floor(mins / 60) % 24, m = mins % 60;
+      return `${h % 12 || 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
+    }
+    const fmtFt = (ft) => `${ft >= 0 ? "+" : "−"}${Math.abs(ft).toFixed(1)} ft`;
+
+    // Smooth (Catmull-Rom) height at a fractional hour of today
+    function heightAt(hour) {
+      const v = tide.v, x = tide.start + hour, i = Math.floor(x), t = x - i;
+      const p0 = v[i - 1], p1 = v[i], p2 = v[i + 1] ?? v[i], p3 = v[i + 2] ?? p2;
+      return 0.5 * (2 * p1 + (p2 - p0) * t + (2 * p0 - 5 * p1 + 4 * p2 - p3) * t * t + (3 * p1 - p0 - 3 * p2 + p3) * t * t * t);
+    }
+
+    // Highs and lows today; a parabola through 3 hourly points estimates the exact time and height
+    function findExtremes() {
+      const v = tide.v, out = [];
+      for (let i = tide.start; i < tide.start + 24; i++) {
+        const a = v[i - 1], b = v[i], c = v[i + 1];
+        const isHigh = b > a && b >= c, isLow = b < a && b <= c;
+        if (!isHigh && !isLow) continue;
+        const denom = a - 2 * b + c;
+        const off = denom ? (a - c) / (2 * denom) : 0;
+        const hour = i - tide.start + off;
+        if (hour >= 0 && hour < 24) out.push({ hour, ft: b - (a - c) * off / 4, high: isHigh });
+      }
+      return out;
+    }
+
+    function renderTides(data, currentTime) {
+      const section = $("tides");
+      const today = currentTime.slice(0, 10);
+      const times = data?.hourly?.time || [];
+      const start = times.indexOf(`${today}T00:00`);
+      const raw = data?.hourly?.sea_level_height_msl || [];
+      // Need today plus one hour on each side; inland locations return nulls
+      const slice = raw.slice(start - 1, start + 25);
+      if (start < 1 || slice.length < 26 || slice.some((x) => x == null)) {
+        tide = null;
+        section.classList.add("hidden");
+        return;
+      }
+      tide = { v: raw.map((m) => m * M_TO_FT), start };
+      section.classList.remove("hidden");
+
+      // Chart geometry (SVG viewBox units)
+      const W = 360, L = 8, R = 352, T = 34, B = 140;
+      const samples = [];
+      for (let m = 0; m <= 24 * 60; m += 10) samples.push(heightAt(m / 60));
+      const lo = Math.min(...samples), hi = Math.max(...samples), pad = (hi - lo) * 0.1 || 0.5;
+      const X = (hour) => L + (hour / 24) * (R - L);
+      const Y = (ft) => B - ((ft - (lo - pad)) / (hi - lo + 2 * pad)) * (B - T);
+
+      const pts = samples.map((ft, k) => `${X(k / 6).toFixed(1)},${Y(ft).toFixed(1)}`);
+      const extremes = findExtremes().map((e) => {
+        const x = X(e.hour), y = Y(e.ft);
+        const anchor = x < 50 ? "start" : x > W - 50 ? "end" : "middle";
+        const ty = e.high ? y - 16 : y + 14;
+        return `<circle cx="${x}" cy="${y}" r="3.5" fill="#fff"/>
+          <text x="${x}" y="${ty}" text-anchor="${anchor}" font-weight="600">${e.high ? "▲" : "▼"} ${fmtFt(e.ft)}</text>
+          <text x="${x}" y="${ty + 11}" text-anchor="${anchor}" class="axis">${fmtTime(e.hour)}</text>`;
+      }).join("");
+      const axis = [0, 6, 12, 18, 24].map((h) =>
+        `<text x="${X(h)}" y="185" text-anchor="${h === 0 ? "start" : h === 24 ? "end" : "middle"}" class="axis">${h === 24 ? "12AM" : fmtTime(h).replace(":00 ", "")}</text>`).join("");
+
+      $("tide-chart").innerHTML = `
+        <defs><linearGradient id="tide-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#fff" stop-opacity="0.35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+        </linearGradient></defs>
+        <polygon points="${L},${B} ${pts.join(" ")} ${R},${B}" fill="url(#tide-fill)"/>
+        <polyline points="${pts.join(" ")}" fill="none" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/>
+        <line x1="${L}" y1="${B}" x2="${R}" y2="${B}" stroke="#fff" stroke-opacity="0.25"/>
+        ${extremes}${axis}
+        <line id="tide-cursor" y1="${T - 10}" y2="${B}" stroke="#fff" stroke-width="1.5" stroke-dasharray="3 3"/>
+        <circle id="tide-dot" r="5.5" fill="#fff" stroke="rgba(0,0,0,0.25)" stroke-width="2"/>`;
+
+      const nowHour = Number(currentTime.slice(11, 13)) + Number(currentTime.slice(14, 16)) / 60;
+      tide.X = X; tide.Y = Y; tide.L = L; tide.R = R; tide.nowHour = nowHour;
+      moveTideCursor(nowHour);
+    }
+
+    function moveTideCursor(hour) {
+      hour = Math.min(24, Math.max(0, hour));
+      const ft = heightAt(Math.min(hour, 23.999));
+      const x = tide.X(hour);
+      $("tide-cursor").setAttribute("x1", x);
+      $("tide-cursor").setAttribute("x2", x);
+      $("tide-dot").setAttribute("cx", x);
+      $("tide-dot").setAttribute("cy", tide.Y(ft));
+      const isNow = Math.abs(hour - tide.nowHour) < 1 / 60;
+      $("tide-readout").innerHTML = `${isNow ? "Now" : fmtTime(hour)} · <span class="h">${fmtFt(ft)}</span>`;
+    }
+
+    // Drag (mouse or finger) across the chart to move the cursor
+    const chart = $("tide-chart");
+    function onPointer(e) {
+      if (!tide || (e.type === "pointermove" && e.pointerType !== "mouse" && !e.buttons)) return;
+      const box = chart.getBoundingClientRect();
+      const vx = ((e.clientX - box.left) / box.width) * 360;
+      moveTideCursor(((vx - tide.L) / (tide.R - tide.L)) * 24);
+    }
+    chart.addEventListener("pointerdown", onPointer);
+    chart.addEventListener("pointermove", onPointer);
+    chart.addEventListener("pointerleave", (e) => tide && e.pointerType === "mouse" && moveTideCursor(tide.nowHour));
 
     function render(place, data) {
       const c = data.current;
