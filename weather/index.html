@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Weather</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -83,6 +85,14 @@
     #tide-chart .axis { opacity: 0.7; }
     .tide-note { font-size: 12px; opacity: 0.65; margin-top: 6px; }
 
+    #radar-map { height: 320px; border-radius: 14px; overflow: hidden; background: #1b2530; }
+    .radar-controls { display: flex; align-items: center; gap: 12px; margin-top: 10px; font-size: 15px; }
+    .radar-controls button {
+      background: rgba(255, 255, 255, 0.25); border: none; color: #fff;
+      border-radius: 12px; padding: 6px 14px; font-size: 15px; cursor: pointer;
+    }
+    .leaflet-control-attribution { font-size: 10px; }
+
     .details { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .details .value { font-size: 28px; font-weight: 400; margin-top: 4px; }
 
@@ -122,6 +132,15 @@
         <div class="tide-readout" id="tide-readout"></div>
         <svg id="tide-chart" viewBox="0 0 360 190"></svg>
         <div class="tide-note">Height vs. mean sea level · model estimate, not for navigation · drag across the chart</div>
+      </section>
+
+      <section class="glass" id="radar" style="margin-top:16px">
+        <div class="label">Rain radar · last ~80 min</div>
+        <div id="radar-map"></div>
+        <div class="radar-controls">
+          <button type="button" id="radar-play">Pause</button>
+          <span id="radar-time"></span>
+        </div>
       </section>
 
       <section class="details" style="margin-top:16px">
@@ -181,6 +200,7 @@
         const tideData = tideRes && tideRes.ok ? await tideRes.json().catch(() => null) : null;
         renderTides(tideData, data.current.time);
         $("message").classList.add("hidden");
+        showRadar(place);
       } catch {
         showMessage("Couldn't load the weather. Please try again.");
       }
@@ -335,6 +355,70 @@
 
       $("weather").classList.remove("hidden");
     }
+
+    // ---------- Rain radar (RainViewer, free for personal/educational use; max tile zoom 7) ----------
+    let map, marker, frames = [], frameIdx = 0, playTimer = null;
+
+    function showRadar(place) {
+      if (!window.L) return $("radar").classList.add("hidden");
+      if (!map) {
+        map = L.map("radar-map", { zoomControl: false, maxZoom: 10, minZoom: 3 });
+        L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a> · Radar <a href="https://www.rainviewer.com/">RainViewer</a>',
+        }).addTo(map);
+        marker = L.circleMarker([0, 0], { radius: 6, color: "#fff", weight: 2, fillColor: "#2f80ed", fillOpacity: 1 }).addTo(map);
+        map.setView([place.latitude, place.longitude], 7);
+        loadRadarFrames();
+      }
+      map.invalidateSize();
+      map.setView([place.latitude, place.longitude], 7);
+      marker.setLatLng([place.latitude, place.longitude]);
+    }
+
+    async function loadRadarFrames() {
+      try {
+        const res = await fetch("https://api.rainviewer.com/public/weather-maps.json");
+        const data = await res.json();
+        // Last 8 frames (~80 min) keeps tile requests under RainViewer's 100/minute limit
+        frames = data.radar.past.slice(-8).map((f) => ({
+          time: f.time,
+          layer: L.tileLayer(`${data.host}${f.path}/512/{z}/{x}/{y}/2/1_1.png`, {
+            tileSize: 512, zoomOffset: -1, maxNativeZoom: 8, opacity: 0,
+          }).addTo(map),
+        }));
+        frameIdx = frames.length - 1;
+        showFrame(frameIdx);
+        play();
+      } catch {
+        $("radar-time").textContent = "Radar unavailable right now.";
+      }
+    }
+
+    function showFrame(i) {
+      frames.forEach((f, k) => f.layer.setOpacity(k === i ? 0.8 : 0));
+      const t = new Date(frames[i].time * 1000).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+      $("radar-time").textContent = i === frames.length - 1 ? `${t} (latest)` : t;
+    }
+
+    function play() {
+      clearInterval(playTimer);
+      playTimer = setInterval(() => {
+        frameIdx = (frameIdx + 1) % frames.length;
+        showFrame(frameIdx);
+      }, 600);
+      $("radar-play").textContent = "Pause";
+    }
+
+    $("radar-play").addEventListener("click", () => {
+      if (!frames.length) return;
+      if (playTimer) {
+        clearInterval(playTimer);
+        playTimer = null;
+        $("radar-play").textContent = "Play";
+      } else {
+        play();
+      }
+    });
 
     // City search via Open-Meteo's free geocoding API
     $("search-form").addEventListener("submit", async (e) => {
