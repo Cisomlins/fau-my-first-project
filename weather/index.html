@@ -70,14 +70,18 @@
     .hour.now span:first-child { background: #fff; color: #111; border-radius: 8px; padding: 0 7px; text-shadow: none; }
 
     .day {
-      display: grid; grid-template-columns: 60px 36px 1fr; align-items: center;
+      display: grid; grid-template-columns: 52px 76px 34px 1fr 34px; align-items: center; gap: 8px;
       padding: 10px 0; font-size: 17px;
       border-bottom: 1px solid rgba(255, 255, 255, 0.12);
     }
     .day:last-child { border-bottom: none; }
+    .day .cond { display: flex; align-items: center; gap: 4px; }
     .day .icon { font-size: 22px; }
-    .day .range { text-align: right; }
-    .day .range .min { opacity: 0.65; margin-right: 12px; }
+    .day .pop { font-size: 12px; color: #8fd3ff; font-weight: 600; }
+    .day .min { opacity: 0.65; text-align: right; }
+    .day .max { text-align: right; }
+    .day .bar { display: flex; gap: 2px; }
+    .day .bar i { flex: 1; height: 6px; border-radius: 1px; background: rgba(255, 255, 255, 0.15); }
 
     .tide-readout { font-size: 17px; margin-bottom: 6px; }
     .tide-readout .h { font-weight: 600; }
@@ -342,6 +346,20 @@
     chart.addEventListener("pointermove", onPointer);
     chart.addEventListener("pointerleave", (e) => tide && e.pointerType === "mouse" && moveTideCursor(tide.nowHour));
 
+    // Temperature (°F) → color: blue at freezing, yellow ~60, orange ~72, red 85+
+    const TEMP_STOPS = [[32, [74, 144, 226]], [50, [79, 195, 247]], [60, [255, 225, 77]], [72, [255, 162, 58]], [85, [255, 77, 58]], [100, [194, 24, 91]]];
+    function tempColor(f) {
+      const s = TEMP_STOPS;
+      if (f <= s[0][0]) return `rgb(${s[0][1]})`;
+      for (let k = 1; k < s.length; k++) {
+        if (f <= s[k][0]) {
+          const t = (f - s[k - 1][0]) / (s[k][0] - s[k - 1][0]);
+          return `rgb(${s[k - 1][1].map((c, j) => Math.round(c + (s[k][1][j] - c) * t))})`;
+        }
+      }
+      return `rgb(${s[s.length - 1][1]})`;
+    }
+
     const COMPASS = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];
     const clock = (iso) => fmtTime(Number(iso.slice(11, 13)) + Number(iso.slice(14, 16)) / 60);
 
@@ -389,12 +407,24 @@
         </div>`;
       }).join("");
 
+      // Segmented bar per day: the week's full low→high range split into 12 segments,
+      // lit between that day's low and high and colored by actual temperature
+      const SEGS = 12;
+      const wkMin = Math.min(...d.temperature_2m_min), wkMax = Math.max(...d.temperature_2m_max);
+      const step = (wkMax - wkMin) / SEGS || 1;
       $("daily").innerHTML = d.time.map((t, i) => {
         const name = i === 0 ? "Today" : new Date(t + "T12:00").toLocaleDateString("en-US", { weekday: "short" });
+        const lo = d.temperature_2m_min[i], hiT = d.temperature_2m_max[i];
+        const bar = Array.from({ length: SEGS }, (_, k) => {
+          const a = wkMin + k * step, b = a + step;
+          return b > lo && a < hiT ? `<i style="background:${tempColor((a + b) / 2)}"></i>` : "<i></i>";
+        }).join("");
         return `<div class="day">
           <span>${name}</span>
-          <span class="icon">${describe(d.weather_code[i]).icon}</span>
-          <span class="range"><span class="min">${Math.round(d.temperature_2m_min[i])}°</span>${Math.round(d.temperature_2m_max[i])}°</span>
+          <span class="cond"><span class="icon">${describe(d.weather_code[i]).icon}</span><span class="pop">💧${d.precipitation_probability_max[i] ?? 0}%</span></span>
+          <span class="min">${Math.round(lo)}°</span>
+          <span class="bar">${bar}</span>
+          <span class="max">${Math.round(hiT)}°</span>
         </div>`;
       }).join("");
 
